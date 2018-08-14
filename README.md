@@ -1,3 +1,3 @@
 # didyougogo
 
-[http://Didyougogo.com](Didyougogo.com) tooling.
+[Didyougogo.com](http://Didyougogo.com) tooling.
