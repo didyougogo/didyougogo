@@ -73,29 +73,36 @@ namespace WikipediaDumpReader
             }
             else if (action == "submit")
             {
+                var fileName = args[1];
                 var url = args[2];
+                var count = int.Parse(args[3]);
+                var batchSize = int.Parse(args[4]);
+                var batchCount = 1;
+                var fullTime = Stopwatch.StartNew();
 
-                foreach (var batch in ReadFile(args).Batch(1000))
+                foreach (var batch in ReadFile(fileName, count).Batch(batchSize))
                 {
+                    var time = Stopwatch.StartNew();
+
                     Submit(
                         batch.Where(x => x.Contains("title")).Select(x => new Dictionary<string, object>
                             {
-                                { "language", x["language"].ToString() },
-                                { "site", "en.wikipedia.org" },
-                                { "_url", string.Format("www.wikipedia.org/search-redirect.php?family=wikipedia&language={0}&search={1}", x["language"], x["title"]) },
+                                { "_language", x["language"].ToString() },
+                                { "__url", string.Format("www.wikipedia.org/search-redirect.php?family=wikipedia&language={0}&search={1}", x["language"], x["title"]) },
                                 { "title", x["title"] },
-                                { "body", x["text"] },
-                                { "_created", DateTime.Now.ToBinary() }
+                                { "body", x["text"] }
                             }), 
                         url);
+
+                    Console.WriteLine("submit {0} took {1}", batchCount++, time.Elapsed);
                 }
+
+                Console.WriteLine("write took {0}", fullTime.Elapsed);
             }
         }
 
-        private static IEnumerable<IDictionary> ReadFile(string[] args)
+        private static IEnumerable<IDictionary> ReadFile(string fileName, int count)
         {
-            var fileName = args[1];
-            var count = int.Parse(args[3]);
             var read = 0;
 
             using (var stream = File.OpenRead(fileName))
@@ -125,17 +132,15 @@ namespace WikipediaDumpReader
 
         private static void Submit(IEnumerable<object> documents, string url)
         {
-            var time = Stopwatch.StartNew();
-
             var httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
             httpWebRequest.ContentType = "application/json";
             httpWebRequest.Method = "POST";
 
             var json = JsonConvert.SerializeObject(documents);
 
-            using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
+            using (var stream = httpWebRequest.GetRequestStream())
             {
-                streamWriter.Write(json);
+                Serialize(documents, stream);
             }
 
             var httpResponse = (HttpWebResponse)httpWebRequest.GetResponse();
@@ -143,8 +148,17 @@ namespace WikipediaDumpReader
             {
                 var result = streamReader.ReadToEnd();
             }
+        }
 
-            Console.WriteLine("submit took {0}", time.Elapsed);
+        private static void Serialize(IEnumerable<object> docs, Stream stream)
+        {
+            using (StreamWriter writer = new StreamWriter(stream))
+            using (JsonTextWriter jsonWriter = new JsonTextWriter(writer))
+            {
+                JsonSerializer ser = new JsonSerializer();
+                ser.Serialize(jsonWriter, docs);
+                jsonWriter.Flush();
+            }
         }
     }
 
