@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 using ICSharpCode.SharpZipLib.BZip2;
 using Newtonsoft.Json;
 
@@ -88,10 +90,10 @@ namespace WikipediaDumpReader
                         batch.Where(x => x.Contains("title")).Select(x => new Dictionary<string, object>
                             {
                                 { "_language", x["language"].ToString() },
-                                { "__url", string.Format("www.wikipedia.org/search-redirect.php?family=wikipedia&language={0}&search={1}", x["language"], x["title"]) },
+                                { "_url", string.Format("www.wikipedia.org/search-redirect.php?family=wikipedia&language={0}&search={1}", x["language"], x["title"]) },
                                 { "title", x["title"] },
                                 { "body", x["text"] }
-                            }), 
+                            }),
                         url);
 
                     Console.WriteLine("submit {0} took {1}", batchCount++, time.Elapsed);
@@ -130,7 +132,7 @@ namespace WikipediaDumpReader
             }
         }
 
-        private static void Submit(IEnumerable<object> documents, string url)
+        private static void Submit(IEnumerable<object> documents, string url, bool breakOnError = false)
         {
             var httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
             httpWebRequest.ContentType = "application/json";
@@ -143,10 +145,23 @@ namespace WikipediaDumpReader
                 Serialize(documents, stream);
             }
 
-            var httpResponse = (HttpWebResponse)httpWebRequest.GetResponse();
-            using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+            try
             {
-                var result = streamReader.ReadToEnd();
+                var httpResponse = (HttpWebResponse)httpWebRequest.GetResponse();
+
+                if (httpResponse.StatusCode != HttpStatusCode.OK)
+                {
+                    throw new Exception();
+                }
+            }
+            catch
+            {
+                if (breakOnError)
+                    throw new Exception();
+
+                Thread.Sleep(1000);
+
+                Submit(documents, url, breakOnError: true);
             }
         }
 
