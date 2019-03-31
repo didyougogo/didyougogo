@@ -116,6 +116,9 @@ namespace WikipediaDumpReader
                 {
                     line = reader.ReadLine();
 
+                    if (line == null)
+                        break;
+
                     read++;
 
                     if (line.StartsWith("]") || read == count)
